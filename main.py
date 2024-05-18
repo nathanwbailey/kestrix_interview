@@ -27,7 +27,6 @@ print(f"Max bound: {bounding_box.max_bound}")
 centroid = pcd.get_center()
 print(f"Centroid: {centroid}")
 
-# o3d.visualization.draw_geometries([pcd])
 
 #Preprocess the point cloud
 #Downsample into voxels
@@ -42,13 +41,14 @@ pcd_down = pcd_down.remove_non_finite_points()
 #DBSCAN
 #Compute fpfh
 # fpfh = o3d.pipelines.registration.compute_fpfh_feature(pcd_down, o3d.geometry.KDTreeSearchParamHybrid(radius=voxel_size * 5.0,max_nn=100))
-
 o3d.io.write_point_cloud("property_point_cloud.ply", pcd_down)
 pre_processed_centroid = pcd_down.get_center()
 print(f"Pre Processed Centroid: {pre_processed_centroid}")
 
+#Save file for PDAL
 o3d.io.write_point_cloud('pdal_point_cloud_input.ply', pcd_down)
 
+#PDAL pipeline
 pipeline = '''
 [
     {
@@ -60,7 +60,7 @@ pipeline = '''
     },
     {
         "type":"filters.range",
-        "limits":"Classification![2:2]"
+        "limits":"Classification![2:2]" //Remove the ground points
     },
     {
         "type": "writers.ply",
@@ -75,11 +75,11 @@ pipeline_pdal.execute()
 point_cloud = o3d.io.read_point_cloud('pdal_point_cloud_output.ply', print_progress=True)
 o3d.visualization.draw_geometries([point_cloud])
 
+#TODO
 def is_valid_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.ndarray,  min_area: int = 10, max_area: int = 25, centroid_threshold: int = 2) -> bool:
-    """TODO"""
     return True
 
-#Extract some plane susing RANSAC
+#Extract the planes using RANSAC
 remaining_points = deepcopy(pcd_down)
 planes = []
 for _ in range(10):
