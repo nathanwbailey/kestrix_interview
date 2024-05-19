@@ -99,6 +99,7 @@ def choose_point_in_plane(plane_equation: np.ndarray, x_val: int | float, y_val:
 
 def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Given a plane equation obtain an orthonormal_basis."""
+    # Choose starting x and y values so that the 2 points are linearly independent
     v1 = choose_point_in_plane(plane_equation, 1, 0)
     v2 = choose_point_in_plane(plane_equation, 0, 1)
     # Compute the orthonormal basis using the gram-schmidt process (https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process)
