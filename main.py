@@ -11,7 +11,7 @@ from utils import is_valid_plane, save_plane_to_file
 
 # Input the mesh file
 mesh = o3d.io.read_triangle_mesh("property.ply", print_progress=True)
-# Print some summary information about the Mesh, vertices, color, faces
+# Print some summary information about the mesh: vertices, color, faces
 print("Vertices:")
 print(np.asarray(mesh.vertices))
 print("Faces:")
