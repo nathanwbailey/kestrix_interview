@@ -79,13 +79,14 @@ print(f"Pre Processed Centroid: {pre_processed_centroid}")
 
 def project_point_to_plane(normal_vector: np.ndarray, d_value: np.float64, point_to_project: np.ndarray) -> np.ndarray:
     """Project a 3D point onto a plane."""
-    k_value = (d_value - np.dot(point_to_project, normal_vector))/np.sum(np.square(normal_vector))
+    k_value = (d_value - np.dot(point_to_project, normal_vector))/np.dot(normal_vector, normal_vector)
     point_projected = point_to_project + k_value*normal_vector
     return point_projected
 
 def choose_point_in_plane(plane_equation: np.ndarray, x_val: int | float, y_val: int | float) -> np.ndarray:
     """Find a point in a given plane defined by a plane equation."""
     normal_vector = plane_equation[:3]
+    normal_vector = normal_vector / np.linalg.norm(normal_vector)
     cross = np.asarray([0,0,0])
     point_to_return = np.asarray([0,0,0])
     while np.all(cross == 0):
@@ -97,17 +98,20 @@ def choose_point_in_plane(plane_equation: np.ndarray, x_val: int | float, y_val:
         cross = np.cross(normal_vector, point_to_return)
     return point_to_return
 
+
 def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Given a plane equation obtain an orthonormal_basis."""
     # Choose starting x and y values so that the 2 points are linearly independent
-    v1 = choose_point_in_plane(plane_equation, 1, 0)
-    v2 = choose_point_in_plane(plane_equation, 0, 1)
+    v1 = np.array([1, 0, -(plane_equation[0]/plane_equation[2])])
+    v2 = np.array([0, 1, -(plane_equation[1]/plane_equation[2])])
     # Compute the orthonormal basis using the gram-schmidt process (https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process)
     u1 = v1
-    proj_u1_v2 = (np.dot(v2, u1)*u1)/np.dot(u1,u1)
-    u2 = v2 - proj_u1_v2
     u1 = u1 / np.linalg.norm(u1)
+    proj_u1_v2 = (np.dot(v2, u1)*u1)
+    u2 = v2 - proj_u1_v2
+    # u1 = u1 / np.linalg.norm(u1)
     u2 = u2 / np.linalg.norm(u2)
+
 
     # Norm (length) should be one, but check against very close value due to fp errors
     assert np.linalg.norm(u1) >= 0.99999999999999
@@ -115,7 +119,6 @@ def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np
     # Dot product should be zero, but check against very small value due to fp errors
     assert np.dot(u1, u2) < 1e-10
     return u1, u2
-
 
 
 def transform_3d_point_to_2d(point_to_transform: np.ndarray, vector_v1: np.ndarray, vector_v2: np.ndarray) -> np.ndarray:
@@ -128,22 +131,17 @@ def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.
     compare_centroid = centroid_to_compare.tolist()[2]
     if plane_centroid-compare_centroid < centroid_threshold:
         return False
-    # convex_hull, _ = plane.compute_convex_hull()
-    # print(convex_hull.get_surface_area())
-    # # o3d.visualization.draw_geometries([convex_hull])
-
     plane_points = np.asarray(plane.points)
     v1, v2 = obtain_orthonormal_basis(plane_eq)
     transformed_points = []
     for point in plane_points:
-        point_projected = project_point_to_plane(plane_eq[:3], plane_eq[3], point)
+        point_projected = project_point_to_plane(plane_eq[:3], plane_eq[-1], point)
         point_2d = transform_3d_point_to_2d(point_projected, v1, v2)
         transformed_points.append(point_2d)
 
     transformed_points = np.stack(transformed_points, axis=0)
-
-    plane_area = ConvexHull(transformed_points).area
-    print(plane_area)
+    # 2D co-ordinates, so use the volume which gives the area
+    plane_area = ConvexHull(transformed_points).volume
     if plane_area <= min_area or plane_area >= max_area:
         return False
     return True
@@ -167,5 +165,5 @@ for _ in range(10):
         plane.paint_uniform_color([1,0,0])
         remaining_points_plane = pcd_down_copy.select_by_index(inliners, invert=True)
         remaining_points.paint_uniform_color([0,1,0])
-        #o3d.visualization.draw_geometries([plane, remaining_points])
+        o3d.visualization.draw_geometries([plane, remaining_points])
 
