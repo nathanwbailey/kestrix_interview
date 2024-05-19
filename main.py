@@ -20,7 +20,7 @@ bounding_box_mesh = mesh.get_axis_aligned_bounding_box()
 print(f"Min bound: {bounding_box_mesh.min_bound}")
 print(f"Max bound: {bounding_box_mesh.max_bound}")
 pcd = mesh.sample_points_uniformly(number_of_points=25000)
-# pcd = mesh.sample_points_poisson_disk(number_of_points=10000, pcl=pcd)
+pcd = mesh.sample_points_poisson_disk(number_of_points=10000, pcl=pcd)
 # o3d.visualization.draw_geometries([pcd])
 #Print some summary information about the PCD
 bounding_box = pcd.get_axis_aligned_bounding_box()
@@ -100,23 +100,25 @@ def choose_point_in_plane(plane_equation: np.ndarray, x_val: int | float, y_val:
 
 def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Given a plane equation obtain an orthonormal_basis."""
-    # Choose starting x and y values so that the 2 points are linearly independent
-    v1 = choose_point_in_plane(plane_equation,0,1)
-    v2 = choose_point_in_plane(plane_equation,1,0)
-    # Compute the orthonormal basis using the gram-schmidt process (https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process)
-    u1 = v1
-    u1 = u1 / np.linalg.norm(u1)
-    proj_u1_v2 = (np.dot(v2, u1)*u1)
-    u2 = v2 - proj_u1_v2
-    u2 = u2 / np.linalg.norm(u2)
+    normal_vector = plane_equation[:3]
+    cross = np.asarray([0,0,0])
+    v1 = np.asarray([0,0,0])
+    while np.all(cross == 0):
+        x = randint(1, 5)
+        y = randint(1, 5)
+        z = (plane_equation[-1] - x*plane_equation[0] - y*plane_equation[1])/plane_equation[2]
+        v1 = np.asarray([x,y,z])
+        #Check for non-colinear
+        cross = np.cross(normal_vector, v1)
+    v2 = np.cross(normal_vector, v1)
+    v1 = v1 / np.linalg.norm(v1)
+    v2 = v2 / np.linalg.norm(v2)
     # Norm (length) should be one, but check against very close value due to fp errors
-    assert np.linalg.norm(u1) >= 0.99999999999999
-    assert np.linalg.norm(u2) >= 0.99999999999999
+    assert np.linalg.norm(v1) >= 0.99999999999999
+    assert np.linalg.norm(v2) >= 0.99999999999999
     # Dot product should be zero, but check against very small value due to fp errors
-    assert np.dot(u1, u2) < 1e-10
-
-    return u1, u2
-
+    assert np.dot(v1, v2) < 1e-10
+    return v1, v2
 
 def transform_3d_point_to_2d(point_to_transform: np.ndarray, vector_v1: np.ndarray, vector_v2: np.ndarray) -> np.ndarray:
     """Given an orthonormal_basis, transform a 3D point to a 2D point."""
@@ -139,6 +141,7 @@ def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.
     transformed_points = np.stack(transformed_points, axis=0)
     # 2D co-ordinates, so use the volume which gives the area
     plane_area = ConvexHull(transformed_points).volume
+    print(plane_area)
     if plane_area <= min_area or plane_area >= max_area:
         return False
     return True
@@ -148,7 +151,7 @@ remaining_points = deepcopy(pcd_down)
 pcd_down_copy = deepcopy(pcd_down)
 planes = []
 for _ in range(10):
-    plane_eq, inliners = remaining_points.segment_plane(distance_threshold=0.033, ransac_n=3, num_iterations=1000)
+    plane_eq, inliners = remaining_points.segment_plane(distance_threshold=0.07, ransac_n=3, num_iterations=1000)
     plane = remaining_points.select_by_index(inliners)
 
     """
@@ -162,5 +165,5 @@ for _ in range(10):
         plane.paint_uniform_color([1,0,0])
         remaining_points_plane = pcd_down_copy.select_by_index(inliners, invert=True)
         remaining_points.paint_uniform_color([0,1,0])
-        # o3d.visualization.draw_geometries([plane, remaining_points])
+        #o3d.visualization.draw_geometries([plane, remaining_points])
 
