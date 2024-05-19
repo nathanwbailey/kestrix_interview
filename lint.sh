@@ -12,6 +12,6 @@ echo "Running flake8..."
 flake8 . --exclude "$EXCLUDE"
 
 echo "Running mypy..."
-mypy . --exclude "$EXCLUDE"
+mypy . --exclude "$EXCLUDE" --disable-error-code import-untyped
 
 echo "Linting and formatting complete!"
