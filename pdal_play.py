@@ -6,7 +6,6 @@ import numpy as np
 import open3d as o3d
 import pdal
 
-
 # Input the mesh file and convert it to a point cloud using open3D
 mesh = o3d.io.read_triangle_mesh("property.ply", print_progress=True)
 print(mesh)

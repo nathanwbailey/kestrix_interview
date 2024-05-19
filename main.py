@@ -7,9 +7,7 @@ import numpy as np
 import open3d as o3d
 import pdal
 
-from utils import is_valid_plane
-from utils import save_plane_to_file
-
+from utils import is_valid_plane, save_plane_to_file
 
 # Input the mesh file
 mesh = o3d.io.read_triangle_mesh("property.ply", print_progress=True)
