@@ -4,6 +4,8 @@ import numpy as np
 import pdal
 from copy import deepcopy
 from scipy.spatial import ConvexHull
+from random import randint
+from math import isclose
 
 
 #Input the mesh file and convert it to a point cloud using open3D
@@ -76,7 +78,48 @@ pipeline_pdal.execute()
 pre_processed_centroid = pcd_down.get_center()
 print(f"Pre Processed Centroid: {pre_processed_centroid}")
 
-def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.ndarray,  min_area: int = 10, max_area: int = 25, centroid_threshold: int = 2) -> bool:
+def project_point_to_plane(normal_vector: np.ndarray, d_value: np.float64, point_to_project: np.ndarray) -> np.ndarray:
+    """Project a 3D point onto a plane."""
+    k_value = (d_value - np.dot(point_to_project, normal_vector))/np.sum(np.square(normal_vector))
+    point_projected = point_to_project + k_value*normal_vector
+    return point_projected
+
+def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    # if normal_vector[0] != 0:
+    #     v1 = np.array([0, 1, 0])
+    # elif normal_vector[1] != 0:
+    #     v1 = np.array([0, 0, 1])
+    # else:
+    #     v1 = np.array([1, 0, 0])
+
+    normal_vector = plane_equation[:3]
+    cross = np.asarray([0,0,0])
+    v1 = np.asarray([0,0,0])
+    while np.all(cross == 0):
+        x = randint(1, 5)
+        y = randint(1, 5)
+        z = (plane_equation[-1] - x*plane_equation[0] - y*plane_equation[1])/plane_equation[2]
+        v1 = np.asarray([x,y,z])
+        #Check for non-colinear
+        cross = np.cross(normal_vector, v1)
+    
+    v1 = v1 / np.linalg.norm(v1)
+    v2 = np.cross(normal_vector, v1)
+    v2 = v2 / np.linalg.norm(v2)
+    # Norm (length) should be one, but check against very close value due to fp errors
+    assert np.linalg.norm(v1) >= 0.99999999999999
+    assert np.linalg.norm(v2) >= 0.99999999999999
+    # Dot product should be zero, but check against very small value due to fp errors
+    print(np.dot(v1, v2))
+    assert np.dot(v1, v2) < 1e-10
+    return v1, v2
+
+
+
+def transform_3d_point_to_2d(point_to_transform: np.ndarray, vector_v1: np.ndarray, vector_v2: np.ndarray) -> np.ndarray:
+    return np.array([np.dot(point_to_transform, vector_v1), np.dot(point_to_transform, vector_v2)])
+
+def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.ndarray, plane_eq: np.ndarray, min_area: int = 10, max_area: int = 25, centroid_threshold: int = 2) -> bool:
     plane_centroid = plane.get_center().tolist()[2]
     compare_centroid = centroid_to_compare.tolist()[2]
     if plane_centroid-compare_centroid < centroid_threshold:
@@ -84,11 +127,22 @@ def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.
     # convex_hull, _ = plane.compute_convex_hull()
     # print(convex_hull.get_surface_area())
     # # o3d.visualization.draw_geometries([convex_hull])
-    plane_area = ConvexHull(np.asarray(plane.points)[:, :2]).area
+
+    plane_points = np.asarray(plane.points)
+    v1, v2 = obtain_orthonormal_basis(plane_eq)
+    transformed_points = []
+    for point in plane_points:
+        point_projected = project_point_to_plane(plane_eq[:3], plane_eq[3], point)
+        point_2d = transform_3d_point_to_2d(point_projected, v1, v2)
+        transformed_points.append(point_2d)
+
+    transformed_points = np.stack(transformed_points, axis=0)
+
+    plane_area = ConvexHull(transformed_points).area
+    # print(plane_area)
     if plane_area <= min_area or plane_area >= max_area:
         return False
     return True
-    
 
 #Extract the planes using RANSAC
 remaining_points = deepcopy(pcd_down)
@@ -105,9 +159,9 @@ for _ in range(10):
     planes.append(plane)
     remaining_points = remaining_points.select_by_index(inliners, invert=True)
 
-    if is_valid_roof_plane(plane, pre_processed_centroid):
+    if is_valid_roof_plane(plane, pre_processed_centroid, plane_eq):
         plane.paint_uniform_color([1,0,0])
         remaining_points_plane = pcd_down_copy.select_by_index(inliners, invert=True)
         remaining_points.paint_uniform_color([0,1,0])
-        o3d.visualization.draw_geometries([plane, remaining_points])
+        # o3d.visualization.draw_geometries([plane, remaining_points])
 
