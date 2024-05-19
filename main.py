@@ -1,11 +1,10 @@
 """Main file for kestrix interview code."""
+from copy import deepcopy
+from random import randint
 import open3d as o3d
 import numpy as np
 import pdal
-from copy import deepcopy
 from scipy.spatial import ConvexHull
-from random import randint
-from math import isclose
 
 
 #Input the mesh file and convert it to a point cloud using open3D
@@ -85,6 +84,7 @@ def project_point_to_plane(normal_vector: np.ndarray, d_value: np.float64, point
     return point_projected
 
 def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Given a plane equation obtain an orthonormal_basis."""
     # if normal_vector[0] != 0:
     #     v1 = np.array([0, 1, 0])
     # elif normal_vector[1] != 0:
@@ -117,9 +117,11 @@ def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np
 
 
 def transform_3d_point_to_2d(point_to_transform: np.ndarray, vector_v1: np.ndarray, vector_v2: np.ndarray) -> np.ndarray:
+    """Given an orthonormal_basis, transform a 3D point to a 2D point."""
     return np.array([np.dot(point_to_transform, vector_v1), np.dot(point_to_transform, vector_v2)])
 
 def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.ndarray, plane_eq: np.ndarray, min_area: int = 10, max_area: int = 25, centroid_threshold: int = 2) -> bool:
+    """Given a plane, determine if it is valid, given parameters."""
     plane_centroid = plane.get_center().tolist()[2]
     compare_centroid = centroid_to_compare.tolist()[2]
     if plane_centroid-compare_centroid < centroid_threshold:
