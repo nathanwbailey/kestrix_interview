@@ -98,28 +98,27 @@ def choose_point_in_plane(plane_equation: np.ndarray, x_val: int | float, y_val:
         cross = np.cross(normal_vector, point_to_return)
     return point_to_return
 
-
 def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Given a plane equation obtain an orthonormal_basis."""
-    # Choose starting x and y values so that the 2 points are linearly independent
-    v1 = np.array([1, 0, -(plane_equation[0]/plane_equation[2])])
-    v2 = np.array([0, 1, -(plane_equation[1]/plane_equation[2])])
-    # Compute the orthonormal basis using the gram-schmidt process (https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process)
-    u1 = v1
-    u1 = u1 / np.linalg.norm(u1)
-    proj_u1_v2 = (np.dot(v2, u1)*u1)
-    u2 = v2 - proj_u1_v2
-    # u1 = u1 / np.linalg.norm(u1)
-    u2 = u2 / np.linalg.norm(u2)
-
-
+    normal_vector = plane_equation[:3]
+    cross = np.asarray([0,0,0])
+    v1 = np.asarray([0,0,0])
+    while np.all(cross == 0):
+        x = randint(1, 5)
+        y = randint(1, 5)
+        z = (plane_equation[-1] - x*plane_equation[0] - y*plane_equation[1])/plane_equation[2]
+        v1 = np.asarray([x,y,z])
+        #Check for non-colinear
+        cross = np.cross(normal_vector, v1)
+    v2 = np.cross(normal_vector, v1)
+    v1 = v1 / np.linalg.norm(v1)
+    v2 = v2 / np.linalg.norm(v2)
     # Norm (length) should be one, but check against very close value due to fp errors
-    assert np.linalg.norm(u1) >= 0.99999999999999
-    assert np.linalg.norm(u2) >= 0.99999999999999
+    assert np.linalg.norm(v1) >= 0.99999999999999
+    assert np.linalg.norm(v2) >= 0.99999999999999
     # Dot product should be zero, but check against very small value due to fp errors
-    assert np.dot(u1, u2) < 1e-10
-    return u1, u2
-
+    assert np.dot(v1, v2) < 1e-10
+    return v1, v2
 
 def transform_3d_point_to_2d(point_to_transform: np.ndarray, vector_v1: np.ndarray, vector_v2: np.ndarray) -> np.ndarray:
     """Given an orthonormal_basis, transform a 3D point to a 2D point."""
