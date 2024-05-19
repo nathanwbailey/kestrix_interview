@@ -5,6 +5,7 @@ import open3d as o3d
 import numpy as np
 import pdal
 from scipy.spatial import ConvexHull
+import matplotlib.pyplot as plt
 
 
 #Input the mesh file and convert it to a point cloud using open3D
@@ -32,7 +33,7 @@ print(f"Centroid: {centroid}")
 
 #Preprocess the point cloud
 #Downsample into voxels
-voxel_size=0.003
+voxel_size=0.005
 pcd_down = pcd.voxel_down_sample(voxel_size=voxel_size)
 #Recompute normals, use a radius neighbourhood of 2 voxels and 30 NN
 pcd_down.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=voxel_size*2.0, max_nn=30))
@@ -99,7 +100,7 @@ def choose_point_in_plane(plane_equation: np.ndarray, x_val: int | float, y_val:
     return point_to_return
 
 def obtain_orthonormal_basis(plane_equation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Given a plane equation obtain an orthonormal_basis."""
+    """Given a plane equation obtain an orthonormal basis."""
     normal_vector = plane_equation[:3]
     cross = np.asarray([0,0,0])
     v1 = np.asarray([0,0,0])
@@ -124,12 +125,12 @@ def transform_3d_point_to_2d(point_to_transform: np.ndarray, vector_v1: np.ndarr
     """Given an orthonormal_basis, transform a 3D point to a 2D point."""
     return np.array([np.dot(point_to_transform, vector_v1), np.dot(point_to_transform, vector_v2)])
 
-def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.ndarray, plane_eq: np.ndarray, min_area: int = 10, max_area: int = 25, centroid_threshold: int = 2) -> bool:
+def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.ndarray, plane_eq: np.ndarray, min_area: int = 6, max_area: int = 25, centroid_threshold: int = 2) -> tuple[bool, np.ndarray | None]:
     """Given a plane, determine if it is valid, given parameters."""
     plane_centroid = plane.get_center().tolist()[2]
     compare_centroid = centroid_to_compare.tolist()[2]
     if plane_centroid-compare_centroid < centroid_threshold:
-        return False
+        return False, None
     plane_points = np.asarray(plane.points)
     v1, v2 = obtain_orthonormal_basis(plane_eq)
     transformed_points = []
@@ -140,30 +141,45 @@ def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.
 
     transformed_points = np.stack(transformed_points, axis=0)
     # 2D co-ordinates, so use the volume which gives the area
-    plane_area = ConvexHull(transformed_points).volume
-    print(plane_area)
+    convex_hull = ConvexHull(transformed_points)
+    plane_area = convex_hull.volume
+    convex_hull_points = transformed_points[convex_hull.vertices]
     if plane_area <= min_area or plane_area >= max_area:
-        return False
-    return True
+        return False, None
+    return True, convex_hull_points
 
 #Extract the planes using RANSAC
 remaining_points = deepcopy(pcd_down)
 pcd_down_copy = deepcopy(pcd_down)
 planes = []
-for _ in range(10):
-    plane_eq, inliners = remaining_points.segment_plane(distance_threshold=0.07, ransac_n=3, num_iterations=1000)
+for i in range(10):
+    plane_eq, inliners = remaining_points.segment_plane(distance_threshold=0.08, ransac_n=3, num_iterations=5000)
     plane = remaining_points.select_by_index(inliners)
-
-    """
-    A valid plane must have a centroid greater than 2M from the pre_processed_centroid.
-    It must also must be greater than 10m2 and less than 25m2
-    """
     planes.append(plane)
     remaining_points = remaining_points.select_by_index(inliners, invert=True)
-
-    if is_valid_roof_plane(plane, pre_processed_centroid, plane_eq):
+    # A valid plane must have a centroid greater than 2M from the pre_processed_centroid
+    # It must also must be greater than 10m2 and less than 25m2
+    valid_roof_plane = is_valid_roof_plane(plane, pre_processed_centroid, plane_eq)
+    if valid_roof_plane[0]:
         plane.paint_uniform_color([1,0,0])
         remaining_points_plane = pcd_down_copy.select_by_index(inliners, invert=True)
         remaining_points.paint_uniform_color([0,1,0])
         #o3d.visualization.draw_geometries([plane, remaining_points])
 
+    # Bonus Exercise
+    # Plane outline extraction
+    # We can take the convex hull found above which finds the smallest convex polygon encompassing all the points
+    # Scatter these points in a graph and connect the points to obtain the outline of the planes
+    if valid_roof_plane[1] is not None:
+        roof_plane_points = valid_roof_plane[1]
+        #Extract X and Y points
+        roof_plane_x_points = [points[0] for points in roof_plane_points]
+        roof_plane_y_points = [points[1] for points in roof_plane_points]
+        #Add the first point to fully connect the points
+        roof_plane_x_points += [roof_plane_x_points[0]]
+        roof_plane_y_points += [roof_plane_y_points[0]]
+        # Scatter points and plot the line through the points
+        # Scatter points stay above the line
+        plt.scatter(roof_plane_x_points, roof_plane_y_points, zorder=2)
+        plt.plot(roof_plane_x_points, roof_plane_y_points, 'b-', zorder=1)
+        plt.savefig('plane_outline_'+str(i)+'.png')
