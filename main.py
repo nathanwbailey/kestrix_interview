@@ -141,6 +141,7 @@ def is_valid_roof_plane(plane: o3d.geometry.PointCloud, centroid_to_compare: np.
     transformed_points = np.stack(transformed_points, axis=0)
     # 2D co-ordinates, so use the volume which gives the area
     plane_area = ConvexHull(transformed_points).volume
+    print(plane_area)
     if plane_area <= min_area or plane_area >= max_area:
         return False
     return True
@@ -164,5 +165,5 @@ for _ in range(10):
         plane.paint_uniform_color([1,0,0])
         remaining_points_plane = pcd_down_copy.select_by_index(inliners, invert=True)
         remaining_points.paint_uniform_color([0,1,0])
-        o3d.visualization.draw_geometries([plane, remaining_points])
+        #o3d.visualization.draw_geometries([plane, remaining_points])
 
