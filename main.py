@@ -76,7 +76,8 @@ pipeline = """
 # Execute the PDAL pipeline and obtain the output point cloud
 pipeline_pdal = pdal.Pipeline(pipeline)
 pipeline_pdal.execute()
-pcd_down = o3d.io.read_point_cloud("pdal_point_cloud_output.ply", print_progress=True)
+# Leave this out for now, seems to cause issues with comparing centroids
+# pcd_down = o3d.io.read_point_cloud("pdal_point_cloud_output.ply", print_progress=True)
 
 # Get the centroid after the pcd has been processed
 pre_processed_centroid = pcd_down.get_center()
@@ -84,7 +85,6 @@ print(f"Pre Processed Centroid: {pre_processed_centroid}")
 
 # Extract the planes using RANSAC
 remaining_points = deepcopy(pcd_down)
-pcd_down_copy = deepcopy(pcd_down)
 planes = []
 roof_num = 0
 facade_num = 0
@@ -133,8 +133,8 @@ for _ in range(10):
             plane_number=(roof_num if valid_roof_plane[0] else facade_num),
             plane_type=("roof" if valid_roof_plane[0] else "wall"),
         )
-        remaining_points_plane = pcd_down_copy.select_by_index(inliners, invert=True)
         remaining_points.paint_uniform_color([0, 1, 0])
+        o3d.visualization.draw_geometries([plane, remaining_points])
 
     # Bonus Exercise
     # Plane outline extraction
