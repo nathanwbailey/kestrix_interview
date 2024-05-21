@@ -10,11 +10,11 @@ The main code is located in the following two files:
 ### Other files
 * property.ply - Mesh file provided by Kestrix
 * requirements.txt - Contains pip packages used
-* lint.sh - Runs linting tools on the python code
+* lint.sh - Runs linting tools on the Python code
 
 ### How to run:
 * Install python (3.11.9)
-* Install pdal (see https://pdal.io/en/2.7-maintenance/)
+* Install PDAL (see https://pdal.io/en/2.7-maintenance/)
 * (Optionally) Make a virtual environment (e.g. python3 -m venv venv)
 * Install the pip packages: pip install -r requirements.txt
 * Run the script: python3 main.py
