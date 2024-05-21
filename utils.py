@@ -2,6 +2,7 @@
 
 from random import randint
 from typing import Literal
+from copy import deepcopy
 
 import numpy as np
 import open3d as o3d
@@ -98,7 +99,6 @@ def transform_3d_point_to_2d(
         [np.dot(point_to_transform, vector_v1), np.dot(point_to_transform, vector_v2)]
     )
 
-
 def is_valid_plane(
     plane_to_validate: o3d.geometry.PointCloud,
     plane_to_validate_equation: np.ndarray,
@@ -136,9 +136,11 @@ def is_valid_plane(
     plane_area = convex_hull.volume
     # Find the points of the convex hull (perimeter points)
     convex_hull_points = transformed_points[convex_hull.vertices]
-    # Reject ior accept the plane based on area requirements
+    # Reject or accept the plane based on area requirements
+    print(plane_area)
     if plane_area <= min_area or plane_area >= max_area:
         return False, None
+
     return True, convex_hull_points
 
 
@@ -160,3 +162,72 @@ def save_plane_to_file(
             str(plane_type) + "_plane_" + str(plane_number) + "_as_mesh.ply",
             mesh_to_save,
         )
+
+
+def remove_outliers_from_pcd(pcd: o3d.geometry.PointCloud, nb_neighbours: int = 20, std_ratio: float = 2.0) -> o3d.geometry.PointCloud:
+    """Given a PCD file, remove statistical outliers and non finite points."""
+    # Remove statistical outliers
+    _, ind = pcd.remove_statistical_outlier(nb_neighbors=nb_neighbours, std_ratio=std_ratio)
+    pcd = pcd.select_by_index(ind)
+    # Remove non-finite points
+    pcd = pcd.remove_non_finite_points()
+    return pcd
+
+def find_planes_ransac(pcd: o3d.geometry.PointCloud, min_area: int, max_area: int, plane_type: Literal["roof", "wall"], centroid_to_compare: np.ndarray | None = None, centroid_threshold: int = 2, ransac_distance_threshold: float = 0.08, ransac_number: int = 3, ransac_num_iterations: int = 5000, min_points_for_plane: int = 30, nb_neighbours: int = 30, std_ratio: float = 0.7, cluster_exclude_num: int | None = None) -> tuple[list[o3d.geometry.PointCloud], list[np.ndarray], o3d.geometry.PointCloud]:
+    """Find valid planes using the RANSAC Algorithm."""
+    remaining_points = deepcopy(pcd)
+    num = 0
+    convex_hull_points = []
+    planes = []
+    for _ in range(10):
+        # Get the plane from RANSAC
+        plane_eq, inliners = remaining_points.segment_plane(
+            distance_threshold=ransac_distance_threshold, ransac_n=ransac_number, num_iterations=ransac_num_iterations
+        )
+        # Extract the plane from the point cloud
+        plane = remaining_points.select_by_index(inliners)
+        #Pre process the plane to remove outilers
+        plane = remove_outliers_from_pcd(plane, nb_neighbours=nb_neighbours, std_ratio=std_ratio)
+
+        # Optionally we can exclude planes if they have greater than a certain number of clusters
+        if cluster_exclude_num:
+            if np.unique(np.asarray(plane.cluster_dbscan(eps=0.5, min_points=3))).shape[0] > cluster_exclude_num:
+                continue
+
+        # Remove the plane from the overall point cloud
+        remaining_points = remaining_points.select_by_index(inliners, invert=True)
+
+        # Valid planes are compared to area bounds and optionally a centroid
+        if centroid_to_compare is not None:
+            valid_plane = is_valid_plane(
+                plane_to_validate=plane,
+                plane_to_validate_equation=plane_eq,
+                centroid_to_compare=centroid_to_compare,
+                min_area=min_area,
+                max_area=max_area,
+                centroid_threshold=centroid_threshold,
+            )
+        else:
+            valid_plane = is_valid_plane(
+                plane_to_validate=plane,
+                plane_to_validate_equation=plane_eq,
+                min_area=min_area,
+                max_area=max_area,
+            )
+
+
+        if valid_plane[0] and valid_plane[1] is not None:
+            planes.append(plane)
+            convex_hull_points.append(valid_plane[1])
+            plane.paint_uniform_color([1, 0, 0])
+            # Save the plane to a PLY file if valid
+            save_plane_to_file(
+                plane_to_save=plane,
+                plane_number=num,
+                plane_type=plane_type,
+            )
+            remaining_points.paint_uniform_color([0, 1, 0])
+            num += 1
+            o3d.visualization.draw_geometries([plane, remaining_points])
+
+    return planes, convex_hull_points, remaining_points

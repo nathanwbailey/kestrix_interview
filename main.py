@@ -7,7 +7,7 @@ import numpy as np
 import open3d as o3d
 import pdal
 
-from utils import is_valid_plane, save_plane_to_file
+from utils import remove_outliers_from_pcd, find_planes_ransac
 
 # Input the mesh file
 mesh = o3d.io.read_triangle_mesh("property.ply", print_progress=True)
@@ -33,7 +33,6 @@ print(f"Max bound: {bounding_box.max_bound}")
 centroid = pcd.get_center()
 print(f"Centroid: {centroid}")
 
-
 # Preprocess the point cloud
 # Downsample into voxels
 voxel_size = 0.005
@@ -45,13 +44,34 @@ pcd_down.estimate_normals(
     )
 )
 # Remove outliers
-cl, ind = pcd_down.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
-pcd_down = pcd_down.select_by_index(ind)
-pcd_down = pcd_down.remove_non_finite_points()
+pcd_down = remove_outliers_from_pcd(pcd_down, nb_neighbours=20, std_ratio=2.0)
 
+# Get the centroid after the pcd has been processed
+pre_processed_centroid = pcd_down.get_center()
+print(f"Pre Processed Centroid: {pre_processed_centroid}")
+
+# Get the roof planes from RANSAC
+# A valid roof plane must have a centroid greater than 2M from the pre_processed_centroid
+# It must also must be greater than 10m2 and less than 25m2
+roof_planes, roof_plane_convex_hull_points, remaining_points = find_planes_ransac(pcd=pcd_down, min_area=10, max_area=25, plane_type='roof', centroid_to_compare=pre_processed_centroid, centroid_threshold=2, ransac_distance_threshold=0.08, ransac_number=3, ransac_num_iterations=5000)
+
+# Process the PCD ready to detect wall planes
+# We remove the roof planes from the PCD such that they do not get picked up in the upcoming RANSAC process
+remaining_points = deepcopy(pcd_down)
+remaining_point_numpy = np.asarray(remaining_points.points)
+for roof_plane in roof_planes:
+    roof_point = np.asarray(roof_plane.points)
+    roof_point_set = set([tuple(x) for x in roof_point])
+    remaining_point_set = set([tuple(x) for x in remaining_point_numpy])
+    remaining_point_numpy = np.array(list(remaining_point_set-roof_point_set))
+
+# Construct the PCD from the remaining points
+remaining_points = o3d.geometry.PointCloud()
+remaining_points.points = o3d.utility.Vector3dVector(remaining_point_numpy)
+remaining_points.paint_uniform_color([0, 1, 0])
 
 # Save file for PDAL
-o3d.io.write_point_cloud("pdal_point_cloud_input.ply", pcd_down)
+o3d.io.write_point_cloud("pdal_point_cloud_input.ply", remaining_points)
 
 # PDAL pipeline to remove the ground points
 pipeline = """
@@ -76,76 +96,23 @@ pipeline = """
 # Execute the PDAL pipeline and obtain the output point cloud
 pipeline_pdal = pdal.Pipeline(pipeline)
 pipeline_pdal.execute()
-# Leave this out for now, seems to cause issues with comparing centroids
-# pcd_down = o3d.io.read_point_cloud("pdal_point_cloud_output.ply", print_progress=True)
+remaining_points = o3d.io.read_point_cloud("pdal_point_cloud_output.ply", print_progress=True)
+# Remove outliers from the PCD
+remaining_points = remove_outliers_from_pcd(pcd=remaining_points, nb_neighbours=20, std_ratio=1.0)
 
-# Get the centroid after the pcd has been processed
-pre_processed_centroid = pcd_down.get_center()
-print(f"Pre Processed Centroid: {pre_processed_centroid}")
 
-# Extract the planes using RANSAC
-remaining_points = deepcopy(pcd_down)
-planes = []
-roof_num = 0
-facade_num = 0
-for _ in range(10):
-    # Get the plane from RANSAC
-    plane_eq, inliners = remaining_points.segment_plane(
-        distance_threshold=0.08, ransac_n=3, num_iterations=5000
-    )
-    # Extract the plane from the point cloud
-    plane = remaining_points.select_by_index(inliners)
-    planes.append(plane)
-    # Remove the plane from the overall point cloud
-    remaining_points = remaining_points.select_by_index(inliners, invert=True)
+# Get the wall planes from RANSAC
+# A valid wall plane must be greater than 10m2 and less than 30m2
+_, facade_plane_convex_hull_points, _ = find_planes_ransac(pcd=remaining_points, min_area=10, max_area=30, plane_type='wall', ransac_distance_threshold=0.15, ransac_number=3, ransac_num_iterations=5000, nb_neighbours=30, std_ratio=0.7, cluster_exclude_num=1)
 
-    # A valid roof plane must have a centroid greater than 2M from the pre_processed_centroid
-    # It must also must be greater than 10m2 and less than 25m2
-    valid_roof_plane = is_valid_plane(
-        plane_to_validate=plane,
-        plane_to_validate_equation=plane_eq,
-        centroid_to_compare=pre_processed_centroid,
-        min_area=10,
-        max_area=25,
-        centroid_threshold=2,
-    )
-    if valid_roof_plane[0]:
-        roof_num += 1
 
-    # A valid facade must be greater than 10m2 and less than 30m2
-    valid_facade_plane = (False, None)
-    if not valid_roof_plane[0]:
-        valid_facade_plane = is_valid_plane(
-            plane_to_validate=plane,
-            plane_to_validate_equation=plane_eq,
-            min_area=10,
-            max_area=30,
-        )  # type: ignore[assignment]
-
-    if valid_facade_plane[0]:
-        facade_num += 1
-
-    # Save the plane to a PLY file if valid
-    if valid_roof_plane[0] or valid_facade_plane[0]:
-        plane.paint_uniform_color([1, 0, 0])
-        save_plane_to_file(
-            plane_to_save=plane,
-            plane_number=(roof_num if valid_roof_plane[0] else facade_num),
-            plane_type=("roof" if valid_roof_plane[0] else "wall"),
-        )
-        remaining_points.paint_uniform_color([0, 1, 0])
-        o3d.visualization.draw_geometries([plane, remaining_points])
-
-    # Bonus Exercise
-    # Plane outline extraction
-    # We can take the convex hull found above which finds the smallest convex polygon encompassing all the points
-    # Scatter these points in a graph and connect the points to obtain the outline of the planes
-    if valid_roof_plane[1] is not None or valid_facade_plane[1] is not None:
-        convex_hull_plane_points = (
-            valid_roof_plane[1]
-            if valid_roof_plane[1] is not None
-            else valid_facade_plane[1]
-        )
+# Bonus Exercise
+# Plane outline extraction
+# We can take the convex hull found above which finds the smallest convex polygon encompassing all the points
+# Scatter these points in a graph and connect the points to obtain the outline of the planes
+convex_hull_dict = {'roof': roof_plane_convex_hull_points, 'wall': facade_plane_convex_hull_points}
+for key, value in convex_hull_dict.items():
+    for idx, convex_hull_plane_points in enumerate(value):
         # Extract X and Y points
         roof_plane_x_points = [points[0] for points in convex_hull_plane_points]
         roof_plane_y_points = [points[1] for points in convex_hull_plane_points]
@@ -156,7 +123,7 @@ for _ in range(10):
         # Scatter points stay above the line
         plt.scatter(roof_plane_x_points, roof_plane_y_points, zorder=2)
         plt.plot(roof_plane_x_points, roof_plane_y_points, "b-", zorder=1)
-        plane_number = roof_num if valid_roof_plane[0] else facade_num
-        plane_type = "roof" if valid_roof_plane[0] else "wall"
+        plane_number = idx
+        plane_type = key
         plt.savefig(str(plane_type) + "_outline_" + str(plane_number) + ".png")
         plt.clf()
