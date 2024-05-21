@@ -13,7 +13,7 @@ The main code is located in the following two files:
 * lint.sh - Runs linting tools on the Python code
 
 ### How to run:
-* Install python (3.11.9)
+* Install Python (3.11.9)
 * Install PDAL (see https://pdal.io/en/2.7-maintenance/)
 * (Optionally) Make a virtual environment (e.g. python3 -m venv venv)
 * Install the pip packages: pip install -r requirements.txt
