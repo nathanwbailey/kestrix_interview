@@ -16,7 +16,7 @@ The main code is located in the following two files:
 * Install Python (3.11.9)
 * Install PDAL (see https://pdal.io/en/2.7-maintenance/)
 * (Optionally) Make a virtual environment (e.g. python3 -m venv venv)
-* Install the pip packages: pip install -r requirements.txt
+* Install the pip packages: pip3 install -r requirements.txt
 * Run the script: python3 main.py
     * Planes are saved into directories roofs and walls 
 
