@@ -1,6 +1,6 @@
 # Kestrix Interview Code
 
-Implements a solution for the coding challenge provided by Kestrix (kestrix.io)
+Implements a solution for the coding challenge provided by Kestrix (https://www.kestrix.io/)
 
 ### Code:
 The main code is located in the following two files:
