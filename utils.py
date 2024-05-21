@@ -3,6 +3,7 @@
 from random import randint
 from typing import Literal
 from copy import deepcopy
+import os
 
 import numpy as np
 import open3d as o3d
@@ -152,14 +153,15 @@ def save_plane_to_file(
     save_as_mesh: bool = True,
 ) -> None:
     """Save a point cloud to file, can also save it as a mesh too using the complex hull."""
+    os.makedirs(plane_type+'s', exist_ok=True)
     if save_as_point_cloud:
         o3d.io.write_point_cloud(
-            str(plane_type) + "_plane_" + str(plane_number) + ".ply", plane_to_save
+            str(plane_type) + 's/'+ str(plane_type) + "_plane_" + str(plane_number) + ".ply", plane_to_save
         )
     if save_as_mesh:
         mesh_to_save, _ = plane_to_save.compute_convex_hull()
         o3d.io.write_triangle_mesh(
-            str(plane_type) + "_plane_" + str(plane_number) + "_as_mesh.ply",
+            str(plane_type) + 's/'+ str(plane_type) + "_plane_" + str(plane_number) + "_as_mesh.ply",
             mesh_to_save,
         )
 

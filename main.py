@@ -1,7 +1,7 @@
 """Main file for kestrix interview code."""
 
 from copy import deepcopy
-
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import open3d as o3d
@@ -112,6 +112,7 @@ _, facade_plane_convex_hull_points, _ = find_planes_ransac(pcd=remaining_points,
 # Scatter these points in a graph and connect the points to obtain the outline of the planes
 convex_hull_dict = {'roof': roof_plane_convex_hull_points, 'wall': facade_plane_convex_hull_points}
 for key, value in convex_hull_dict.items():
+    os.makedirs(key+'s', exist_ok=True)
     for idx, convex_hull_plane_points in enumerate(value):
         # Extract X and Y points
         roof_plane_x_points = [points[0] for points in convex_hull_plane_points]
@@ -125,5 +126,5 @@ for key, value in convex_hull_dict.items():
         plt.plot(roof_plane_x_points, roof_plane_y_points, "b-", zorder=1)
         plane_number = idx
         plane_type = key
-        plt.savefig(str(plane_type) + "_outline_" + str(plane_number) + ".png")
+        plt.savefig(key+'s/'+str(plane_type) + "_outline_" + str(plane_number) + ".png")
         plt.clf()
