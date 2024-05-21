@@ -1,9 +1,9 @@
 """Functions to use in the main file."""
 
+import os
+from copy import deepcopy
 from random import randint
 from typing import Literal
-from copy import deepcopy
-import os
 
 import numpy as np
 import open3d as o3d
@@ -100,6 +100,7 @@ def transform_3d_point_to_2d(
         [np.dot(point_to_transform, vector_v1), np.dot(point_to_transform, vector_v2)]
     )
 
+
 def is_valid_plane(
     plane_to_validate: o3d.geometry.PointCloud,
     plane_to_validate_equation: np.ndarray,
@@ -153,29 +154,59 @@ def save_plane_to_file(
     save_as_mesh: bool = True,
 ) -> None:
     """Save a point cloud to file, can also save it as a mesh too using the complex hull."""
-    os.makedirs(plane_type+'s', exist_ok=True)
+    os.makedirs(plane_type + "s", exist_ok=True)
     if save_as_point_cloud:
         o3d.io.write_point_cloud(
-            str(plane_type) + 's/'+ str(plane_type) + "_plane_" + str(plane_number) + ".ply", plane_to_save
+            str(plane_type)
+            + "s/"
+            + str(plane_type)
+            + "_plane_"
+            + str(plane_number)
+            + ".ply",
+            plane_to_save,
         )
     if save_as_mesh:
         mesh_to_save, _ = plane_to_save.compute_convex_hull()
         o3d.io.write_triangle_mesh(
-            str(plane_type) + 's/'+ str(plane_type) + "_plane_" + str(plane_number) + "_as_mesh.ply",
+            str(plane_type)
+            + "s/"
+            + str(plane_type)
+            + "_plane_"
+            + str(plane_number)
+            + "_as_mesh.ply",
             mesh_to_save,
         )
 
 
-def remove_outliers_from_pcd(pcd: o3d.geometry.PointCloud, nb_neighbours: int = 20, std_ratio: float = 2.0) -> o3d.geometry.PointCloud:
+def remove_outliers_from_pcd(
+    pcd: o3d.geometry.PointCloud, nb_neighbours: int = 20, std_ratio: float = 2.0
+) -> o3d.geometry.PointCloud:
     """Given a PCD file, remove statistical outliers and non finite points."""
     # Remove statistical outliers
-    _, ind = pcd.remove_statistical_outlier(nb_neighbors=nb_neighbours, std_ratio=std_ratio)
+    _, ind = pcd.remove_statistical_outlier(
+        nb_neighbors=nb_neighbours, std_ratio=std_ratio
+    )
     pcd = pcd.select_by_index(ind)
     # Remove non-finite points
     pcd = pcd.remove_non_finite_points()
     return pcd
 
-def find_planes_ransac(pcd: o3d.geometry.PointCloud, min_area: int, max_area: int, plane_type: Literal["roof", "wall"], centroid_to_compare: np.ndarray | None = None, centroid_threshold: int = 2, ransac_distance_threshold: float = 0.08, ransac_number: int = 3, ransac_num_iterations: int = 5000, min_points_for_plane: int = 30, nb_neighbours: int = 30, std_ratio: float = 0.7, cluster_exclude_num: int | None = None) -> tuple[list[o3d.geometry.PointCloud], list[np.ndarray], o3d.geometry.PointCloud]:
+
+def find_planes_ransac(
+    pcd: o3d.geometry.PointCloud,
+    min_area: int,
+    max_area: int,
+    plane_type: Literal["roof", "wall"],
+    centroid_to_compare: np.ndarray | None = None,
+    centroid_threshold: int = 2,
+    ransac_distance_threshold: float = 0.08,
+    ransac_number: int = 3,
+    ransac_num_iterations: int = 5000,
+    min_points_for_plane: int = 30,
+    nb_neighbours: int = 30,
+    std_ratio: float = 0.7,
+    cluster_exclude_num: int | None = None,
+) -> tuple[list[o3d.geometry.PointCloud], list[np.ndarray], o3d.geometry.PointCloud]:
     """Find valid planes using the RANSAC Algorithm."""
     remaining_points = deepcopy(pcd)
     num = 0
@@ -184,16 +215,25 @@ def find_planes_ransac(pcd: o3d.geometry.PointCloud, min_area: int, max_area: in
     for _ in range(10):
         # Get the plane from RANSAC
         plane_eq, inliners = remaining_points.segment_plane(
-            distance_threshold=ransac_distance_threshold, ransac_n=ransac_number, num_iterations=ransac_num_iterations
+            distance_threshold=ransac_distance_threshold,
+            ransac_n=ransac_number,
+            num_iterations=ransac_num_iterations,
         )
         # Extract the plane from the point cloud
         plane = remaining_points.select_by_index(inliners)
-        #Pre process the plane to remove outilers
-        plane = remove_outliers_from_pcd(plane, nb_neighbours=nb_neighbours, std_ratio=std_ratio)
+        # Pre process the plane to remove outilers
+        plane = remove_outliers_from_pcd(
+            plane, nb_neighbours=nb_neighbours, std_ratio=std_ratio
+        )
 
         # Optionally we can exclude planes if they have greater than a certain number of clusters
         if cluster_exclude_num:
-            if np.unique(np.asarray(plane.cluster_dbscan(eps=0.5, min_points=3))).shape[0] > cluster_exclude_num:
+            if (
+                np.unique(
+                    np.asarray(plane.cluster_dbscan(eps=0.5, min_points=3))
+                ).shape[0]
+                > cluster_exclude_num
+            ):
                 continue
 
         # Remove the plane from the overall point cloud
@@ -216,7 +256,6 @@ def find_planes_ransac(pcd: o3d.geometry.PointCloud, min_area: int, max_area: in
                 min_area=min_area,
                 max_area=max_area,
             )
-
 
         if valid_plane[0] and valid_plane[1] is not None:
             planes.append(plane)
