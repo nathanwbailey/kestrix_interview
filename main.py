@@ -36,16 +36,16 @@ print(f"Centroid: {centroid}")
 
 # Preprocess the point cloud
 # Downsample into voxels
-voxel_size = 0.005
-pcd_down = pcd.voxel_down_sample(voxel_size=voxel_size)
+VOXEL_SIZE = 0.005
+pcd_down = pcd.voxel_down_sample(voxel_size=VOXEL_SIZE)
 # Recompute normals, use a radius neighbourhood of 2 voxels and 30 NN
 pcd_down.estimate_normals(
     search_param=o3d.geometry.KDTreeSearchParamHybrid(
-        radius=voxel_size * 2.0, max_nn=30
+        radius=VOXEL_SIZE * 2.0, max_nn=30
     )
 )
 # Remove outliers
-pcd_down = remove_outliers_from_pcd(pcd_down, nb_neighbours=20, std_ratio=2.0)
+pcd_down, _ = remove_outliers_from_pcd(pcd_down, nb_neighbours=20, std_ratio=2.0)
 
 # Get the centroid after the pcd has been processed
 pre_processed_centroid = pcd_down.get_center()
@@ -64,21 +64,23 @@ roof_planes, roof_plane_convex_hull_points, remaining_points = find_planes_ransa
     ransac_distance_threshold=0.08,
     ransac_number=3,
     ransac_num_iterations=5000,
+    nb_neighbours=30,
+    std_ratio=0.7,
 )
 
 # Process the PCD ready to detect wall planes
 # We remove the roof planes from the PCD such that they do not get picked up in the upcoming RANSAC process
 remaining_points = deepcopy(pcd_down)
-remaining_point_numpy = np.asarray(remaining_points.points)
+remaining_points_numpy = np.asarray(remaining_points.points)
 for roof_plane in roof_planes:
     roof_point = np.asarray(roof_plane.points)
     roof_point_set = set([tuple(x) for x in roof_point])
-    remaining_point_set = set([tuple(x) for x in remaining_point_numpy])
-    remaining_point_numpy = np.array(list(remaining_point_set - roof_point_set))
+    remaining_points_set = set([tuple(x) for x in remaining_points_numpy])
+    remaining_points_numpy = np.array(list(remaining_points_set - roof_point_set))
 
 # Construct the PCD from the remaining points
 remaining_points = o3d.geometry.PointCloud()
-remaining_points.points = o3d.utility.Vector3dVector(remaining_point_numpy)
+remaining_points.points = o3d.utility.Vector3dVector(remaining_points_numpy)
 remaining_points.paint_uniform_color([0, 1, 0])
 
 # Save file for PDAL
@@ -111,7 +113,7 @@ remaining_points = o3d.io.read_point_cloud(
     "pdal_point_cloud_output.ply", print_progress=True
 )
 # Remove outliers from the PCD
-remaining_points = remove_outliers_from_pcd(
+remaining_points, _ = remove_outliers_from_pcd(
     pcd=remaining_points, nb_neighbours=20, std_ratio=1.0
 )
 
@@ -126,7 +128,7 @@ _, facade_plane_convex_hull_points, _ = find_planes_ransac(
     ransac_distance_threshold=0.15,
     ransac_number=3,
     ransac_num_iterations=5000,
-    nb_neighbours=30,
+    nb_neighbours=70,
     std_ratio=0.7,
     cluster_exclude_num=1,
 )

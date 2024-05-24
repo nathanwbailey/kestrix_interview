@@ -130,7 +130,6 @@ def is_valid_plane(
         transformed_points.append(point_2d)
     # Get the points as a numpy array
     transformed_points = np.stack(transformed_points, axis=0)
-
     # Find the convex_hull of the 2D points
     convex_hull = ConvexHull(transformed_points)
     # Get the area of the convex hull
@@ -139,10 +138,9 @@ def is_valid_plane(
     # Find the points of the convex hull (perimeter points)
     convex_hull_points = transformed_points[convex_hull.vertices]
     # Reject or accept the plane based on area requirements
-    print(plane_area)
     if plane_area <= min_area or plane_area >= max_area:
         return False, None
-
+    print(f'Found valid plane with area: {plane_area}')
     return True, convex_hull_points
 
 
@@ -186,10 +184,11 @@ def remove_outliers_from_pcd(
     _, ind = pcd.remove_statistical_outlier(
         nb_neighbors=nb_neighbours, std_ratio=std_ratio
     )
-    pcd = pcd.select_by_index(ind)
+    pcd_to_return = pcd.select_by_index(ind)
+    removed_points = pcd.select_by_index(ind, invert=True)
     # Remove non-finite points
-    pcd = pcd.remove_non_finite_points()
-    return pcd
+    pcd_to_return = pcd_to_return.remove_non_finite_points()
+    return pcd_to_return, np.asarray(removed_points.points)
 
 
 def find_planes_ransac(
@@ -202,7 +201,7 @@ def find_planes_ransac(
     ransac_distance_threshold: float = 0.08,
     ransac_number: int = 3,
     ransac_num_iterations: int = 5000,
-    min_points_for_plane: int = 30,
+    min_points_for_plane: int = 700,
     nb_neighbours: int = 30,
     std_ratio: float = 0.7,
     cluster_exclude_num: int | None = None,
@@ -212,19 +211,30 @@ def find_planes_ransac(
     num = 0
     convex_hull_points = []
     planes = []
-    for _ in range(10):
+    # Find planes until we reach a number of points threshold
+    while True:
         # Get the plane from RANSAC
         plane_eq, inliners = remaining_points.segment_plane(
             distance_threshold=ransac_distance_threshold,
             ransac_n=ransac_number,
             num_iterations=ransac_num_iterations,
         )
+        
+        # If the number of points found in the plane is less than the specified threshold, break finding planes
+        if len(inliners) < min_points_for_plane:
+            break
         # Extract the plane from the point cloud
         plane = remaining_points.select_by_index(inliners)
+        # Remove the plane from the overall point cloud
+        remaining_points = remaining_points.select_by_index(inliners, invert=True)
         # Pre process the plane to remove outilers
-        plane = remove_outliers_from_pcd(
+        plane, removed_points = remove_outliers_from_pcd(
             plane, nb_neighbours=nb_neighbours, std_ratio=std_ratio
         )
+        # Add the removed points back to the overall point cloud
+        remaining_points_numpy = np.concatenate((np.asarray(remaining_points.points), removed_points), axis=0)
+        remaining_points = o3d.geometry.PointCloud()
+        remaining_points.points = o3d.utility.Vector3dVector(remaining_points_numpy)
 
         # Optionally we can exclude planes if they have greater than a certain number of clusters
         if cluster_exclude_num:
@@ -235,9 +245,6 @@ def find_planes_ransac(
                 > cluster_exclude_num
             ):
                 continue
-
-        # Remove the plane from the overall point cloud
-        remaining_points = remaining_points.select_by_index(inliners, invert=True)
 
         # Valid planes are compared to area bounds and optionally a centroid
         if centroid_to_compare is not None:
@@ -267,8 +274,9 @@ def find_planes_ransac(
                 plane_number=num,
                 plane_type=plane_type,
             )
-            remaining_points.paint_uniform_color([0, 1, 0])
             num += 1
+            # Visualize the plane in the point cloud
+            remaining_points.paint_uniform_color([0, 1, 0])
             o3d.visualization.draw_geometries([plane, remaining_points])
 
     return planes, convex_hull_points, remaining_points
