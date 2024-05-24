@@ -137,7 +137,8 @@ _, facade_plane_convex_hull_points, _ = find_planes_ransac(
 # Bonus Exercise
 # Plane outline extraction
 # We can take the convex hull found above which finds the smallest convex polygon encompassing all the points
-# Scatter these points in a graph and connect the points to obtain the outline of the planes
+# We then scatter the points that are vertices of the convex hull and connect them to obtain the outline of the planes
+# Save the plots to a file
 convex_hull_dict = {
     "roof": roof_plane_convex_hull_points,
     "wall": facade_plane_convex_hull_points,
