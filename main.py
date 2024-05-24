@@ -156,8 +156,8 @@ for key, value in convex_hull_dict.items():
         plt.scatter(roof_plane_x_points, roof_plane_y_points, zorder=2)
         plt.plot(roof_plane_x_points, roof_plane_y_points, "b-", zorder=1)
         plane_number = idx
-        plane_type = key
+        PLANE_TYPE = key
         plt.savefig(
-            key + "s/" + str(plane_type) + "_outline_" + str(plane_number) + ".png"
+            key + "s/" + str(PLANE_TYPE) + "_outline_" + str(plane_number) + ".png"
         )
         plt.clf()

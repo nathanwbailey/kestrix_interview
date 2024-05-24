@@ -140,7 +140,7 @@ def is_valid_plane(
     # Reject or accept the plane based on area requirements
     if plane_area <= min_area or plane_area >= max_area:
         return False, None
-    print(f'Found valid plane with area: {plane_area}')
+    print(f"Found valid plane with area: {plane_area}")
     return True, convex_hull_points
 
 
@@ -219,7 +219,6 @@ def find_planes_ransac(
             ransac_n=ransac_number,
             num_iterations=ransac_num_iterations,
         )
-        
         # If the number of points found in the plane is less than the specified threshold, break finding planes
         if len(inliners) < min_points_for_plane:
             break
@@ -232,7 +231,9 @@ def find_planes_ransac(
             plane, nb_neighbours=nb_neighbours, std_ratio=std_ratio
         )
         # Add the removed points back to the overall point cloud
-        remaining_points_numpy = np.concatenate((np.asarray(remaining_points.points), removed_points), axis=0)
+        remaining_points_numpy = np.concatenate(
+            (np.asarray(remaining_points.points), removed_points), axis=0
+        )
         remaining_points = o3d.geometry.PointCloud()
         remaining_points.points = o3d.utility.Vector3dVector(remaining_points_numpy)
 
@@ -276,7 +277,7 @@ def find_planes_ransac(
             )
             num += 1
             # Visualize the plane in the point cloud
-            remaining_points.paint_uniform_color([0, 1, 0])
-            o3d.visualization.draw_geometries([plane, remaining_points])
+            # remaining_points.paint_uniform_color([0, 1, 0])
+            # o3d.visualization.draw_geometries([plane, remaining_points])
 
     return planes, convex_hull_points, remaining_points
