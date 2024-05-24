@@ -14,7 +14,7 @@ The main code is located in the following two files:
 
 ### How to run:
 * Install Python (3.11.9)
-* Install PDAL (see https://pdal.io/en/2.7-maintenance/download.html)
+* Install PDAL e.g. brew install pdal (see https://pdal.io/en/2.7-maintenance/download.html)
 * (Optionally) Make a virtual environment (e.g. python3 -m venv venv)
 * Install the pip packages: pip3 install -r requirements.txt
 * Run the script: python3 main.py
